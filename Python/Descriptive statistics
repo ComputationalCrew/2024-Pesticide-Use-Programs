@@ -1,0 +1,17 @@
+### Descriptive statistics
+
+#importing all related libraries
+import pandas as pd
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+
+### Table 2: Descriptive statistics
+
+data = pd.read_csv('.../Clean_Cluster_Random Forest_V1.csv')
+descriptive = data.describe().T
+descriptive1 = data.groupby('ID_Cluster').mean().T
+descriptive2 = data.groupby('ID_Cluster').std().T
