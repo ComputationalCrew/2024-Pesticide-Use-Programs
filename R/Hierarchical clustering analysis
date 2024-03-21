@@ -1,0 +1,83 @@
+library(magrittr)
+library(dplyr)
+library("pheatmap")
+
+# Data
+dfYear <- read.csv(".../ActiveIngredient_ID.csv", check.names=FALSE)
+dfVariety <- read.csv("D:/USDA/2023/Project/Hierarchical clustering analysis/Data/Standardized/ActiveIngredientHeatmap_Variety5.csv", check.names=FALSE)
+Breaks <- seq(min(c(dfYear, dfVariety)), 
+              max(c(dfYear, dfVariety)), length = 500)
+
+### Figure 4: Two-way hierarchical cluster analysis of fungicide and herbicide active ingredients by hop yard or by cultivar
+# FieldID
+dfYear[2:483] <- as.data.frame(scale(dfYear[2 : 483]))
+dfYear <- as.matrix(dfYear[, -1])
+rownames(dfYear) <- c('Boscalid/Pyraclostrobin', 'Copper hydroxide', 'Copper diammonia diacetate complex', 'Cuprous oxide',
+                      'Fluopyram','Fluopyram/Trifloxystrobin','Folpet','Metrafenone',
+                      'Mineral oil','Myclobutanil','Potassium bicarbonate',
+                      'Quinoxyfen','Reynoutria sachalinensis','Spiroxamine',
+                      'Sulfur','Trifloxystrobin','Triflumizole',
+                      'Carfentrazone','Flumioxazin','Paraquat')
+Type <- read.csv(".../ActiveConstituents_typeYear.csv",row.names="Model")
+a <- pheatmap(dfYear, name = "Number of active ingredients used", #title of legend
+              main = "     Number of active ingredients used",
+              cluster_rows = T, cluster_cols = T, cutree_col = 6,
+              display_numbers = F, 
+              breaks = Breaks, color = hcl.colors(500, "Spectral"),
+              annotation_row = Type,
+              clustering_method="complete",
+              clustering_distance_cols="euclidean",clustering_distance_rows="euclidean",
+              treeheight_row = 10,
+              treeheight_col = 10,
+              cluster_row = T,
+              cluster_col = T,
+              show_rownames = T,
+              show_colnames = F,
+              legend = T,
+              fontsize = 8)
+rownames(dfYear[a$tree_row[["order"]],])
+colnames(dfYear[,a$tree_col[["order"]]])
+b <- sort(cutree(a$tree_col, k=3))
+b
+
+# Variety
+dfVariety[2:36] <- as.data.frame(scale(dfVariety[2 : 36]))
+dfVariety <- as.matrix(dfVariety[, -1])
+rownames(dfVariety) <- c('Boscalid/Pyraclostrobin', 
+                         'Copper diammonia diacetate complex','Copper hydroxide', 'Cuprous oxide',
+                         'Fluopyram','Fluopyram/Trifloxystrobin','Folpet','Metrafenone',
+                         'Mineral oil','Myclobutanil', 'Potassium bicarbonate',
+                         'Quinoxyfen','Reynoutria sachalinensis','Spiroxamine',
+                         'Sulfur','Trifloxystrobin','Triflumizole',
+                         'Carfentrazone','Flumioxazin','Paraquat')
+
+colnames(dfVariety) <- c('Amarillo', 'Apollo', 'Bravo', 'Brewers Gold',
+                         'Bullion', 'Cascade', 'Centennial', 'Chinook',
+                         'Citra', 'Columbia', 'Crystal', 'Delta',
+                         'Fuggle', 'Golding', 'Hallertau Mittelfrüh', 'HHA102',
+                         'Liberty', 'Experimental', 'Magnum', 'Meridan',
+                         'Millennium', 'Mosaic', 'Mt. Hood', 'Nugget',
+                         'Organic Fuggle', 'Saaz', 'Santiam',
+                         'Simcoe', 'Sorachi Ace', 'Sterling', 'Strata',
+                         'Super Galena', 'Tahoma', 'Tettnanger',
+                         'Willamette')
+c <- pheatmap(dfVariety, name = "Number of active ingredients used", #title of legend
+              main = "     Number of active ingredients used",
+              cluster_rows = T, cluster_cols = T, cutree_cols = 4,
+              display_numbers = F,
+              color = hcl.colors(500, "Spectral"),
+              annotation_row = Type,
+              clustering_method="complete",
+              clustering_distance_cols="euclidean",clustering_distance_rows="euclidean",
+              treeheight_row = 10,
+              treeheight_col = 10,
+              cluster_row = T,
+              cluster_col = T,
+              show_rownames = T,
+              show_colnames = T,
+              legend = T,
+              fontsize = 8)
+rownames(dfVariety[c$tree_row[["order"]],])
+colnames(dfVariety[,c$tree_col[["order"]]])
+d <- sort(cutree(c$tree_col, k=2))
+d
