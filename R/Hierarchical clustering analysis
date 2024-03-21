@@ -4,7 +4,7 @@ library("pheatmap")
 
 # Data
 dfYear <- read.csv(".../ActiveIngredient_ID.csv", check.names=FALSE)
-dfVariety <- read.csv("D:/USDA/2023/Project/Hierarchical clustering analysis/Data/Standardized/ActiveIngredientHeatmap_Variety5.csv", check.names=FALSE)
+dfVariety <- read.csv(".../ActiveIngredientHeatmap_Variety5.csv", check.names=FALSE)
 Breaks <- seq(min(c(dfYear, dfVariety)), 
               max(c(dfYear, dfVariety)), length = 500)
 
