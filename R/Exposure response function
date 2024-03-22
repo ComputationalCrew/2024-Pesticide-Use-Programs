@@ -1,0 +1,152 @@
+library("CausalGPS")
+library(ggplot2)
+
+# Data (depending on the group)
+df <- read.csv(".../powdery_mildew_fungicide_record_database_ERF_Ver.1.csv", check.names=FALSE)
+df <- read.csv(".../powdery_mildew_fungicide_record_database_ERF_Ver.2.csv", check.names=FALSE)
+df <- read.csv(".../powdery_mildew_fungicide_record_database_ERF_Ver.3.csv", check.names=FALSE)
+
+set.seed(123)
+df$Quadrant <- as.factor(df$Quadrant)
+df$id <- seq.int(nrow(df))
+summary(df)
+colnames(df)
+
+# 0. Estimate T hat
+# Annual Cost for selected variables
+reg1 <- glm(df$Mildew.Incidence~df$DiseaseApril+df$DiseaseMay+df$DiseaseJune+df$DiseaseJuly+df$Flag.shoot.incidence+
+              df$Susceptibility.to.V6.strains+df$Susceptibility.to.nonV6.strains+
+              df$Initial.strain+df$Pruning.thoroughness+df$Degree.centrality.July.R6+df$Degree.centrality.July.nonR6+
+              df$Quadrant)
+summary(reg1)
+df$T.hat <- predict(reg1)
+
+# Annual Ingredients for selected variables
+reg1 <- glm(df$Mildew.Incidence~df$DiseaseJune+df$DiseaseJuly+
+              df$Susceptibility.to.V6.strains+df$Susceptibility.to.nonV6.strains+df$Initial.strain+df$Pruning.thoroughness+
+              +df$Degree.centrality.July.R6+df$Degree.centrality.July.nonR6+df$Quadrant)
+summary(reg1)
+df$T.hat <- predict(reg1)
+
+# 1. Generating pseudo population 
+# Data weighted for matched to make the distribution of pre-exposure covariates 
+# align across different exposure levels = achieving covariate balance.)
+# Annual Cost
+pseudo_pop <- generate_pseudo_pop(
+  df[, c("id", "T.hat")],
+  df[, c("id", "DiseaseApril","DiseaseMay","DiseaseJune","DiseaseJuly",
+         "Flag.shoot.incidence", "Susceptibility.to.V6.strains", "Susceptibility.to.nonV6.strains", 
+         "Initial.strain", "Pruning.thoroughness", "Degree.centrality.July.R6", 
+         "Degree.centrality.July.nonR6", "Quadrant")],
+  ci_appr = "matching",
+  gps_density = "kernel",
+  use_cov_transform = TRUE,
+  transformers = list("pow2", "pow3", "abs", 
+                      "scale"),
+  exposure_trim_qtls = c(0.01,0.99),
+  sl_lib = c("m_xgboost"),
+  covar_bl_method = "absolute",
+  covar_bl_trs = 0.4,
+  covar_bl_trs_type = "mean",
+  max_attempt = 4,
+  dist_measure = "l1",
+  delta_n = 0.02,          # changed from 1 to 0.02
+  scale = 0.5,
+  nthread = 1
+)                
+plot(pseudo_pop, include_details = TRUE)
+
+# Annual Ingredients
+pseudo_pop <- generate_pseudo_pop(
+  df[, c("id", "T.hat")],
+  df[, c("id", "DiseaseJune","DiseaseJuly","Susceptibility.to.V6.strains", "Susceptibility.to.nonV6.strains", "Initial.strain", 
+         "Pruning.thoroughness", "Degree.centrality.July.R6", "Degree.centrality.July.nonR6","Quadrant")],
+  ci_appr = "matching",
+  gps_density = "kernel",
+  use_cov_transform = TRUE,
+  transformers = list("pow2", "pow3", "abs", 
+                      "scale"),
+  exposure_trim_qtls = c(0.01,0.99),
+  sl_lib = c("m_xgboost"),
+  covar_bl_method = "absolute",
+  covar_bl_trs = 0.4,
+  covar_bl_trs_type = "mean",
+  max_attempt = 4,
+  dist_measure = "l1",
+  delta_n = 0.02,          # changed from 1 to 0.02
+  scale = 0.5,
+  nthread = 1
+)
+plot(pseudo_pop, include_details = TRUE)
+
+# 2. Estimating GPS
+# Annual Cost
+data_with_gps <- estimate_gps(w = pseudo_pop$pseudo_pop[, c("id", "T.hat")],
+                              c = pseudo_pop$pseudo_pop[, c("id","DiseaseApril","DiseaseMay","DiseaseJune","DiseaseJuly",
+                                                            "Flag.shoot.incidence", "Susceptibility.to.V6.strains", "Susceptibility.to.nonV6.strains", 
+                                                            "Initial.strain", "Pruning.thoroughness", "Degree.centrality.July.R6", 
+                                                            "Degree.centrality.July.nonR6", "Quadrant")],
+                              params = list(xgb_max_depth = c(3,4,5),
+                                            xgb_rounds = c(10,20,30,40)),
+                              nthread = 1,                                
+                              sl_lib = c("m_xgboost")
+)
+
+# Annual Ingredients
+data_with_gps <- estimate_gps(w = pseudo_pop$pseudo_pop[, c("id", "T.hat")],
+                              c = pseudo_pop$pseudo_pop[, c("id","DiseaseJune","DiseaseJuly","Susceptibility.to.V6.strains", "Susceptibility.to.nonV6.strains", "Initial.strain", 
+                                                            "Pruning.thoroughness", "Degree.centrality.July.R6", "Degree.centrality.July.nonR6","Quadrant")],
+                              params = list(xgb_max_depth = c(3,4,5),
+                                            xgb_rounds = c(10,20,30,40)),
+                              nthread = 1,                                
+                              sl_lib = c("m_xgboost")
+)
+
+# 3. Modelling outcomes for causal inference
+# Estimate the causal exposure response function (ERF) or 
+# the exposure-response curve (ERC)
+
+# Merge data
+data <- merge(df[, c("id", "AnnualIngredients", "AnnualCost")], pseudo_pop$pseudo_pop, by = "id")
+quant <- quantile(df$T.hat, probs = c(0.1, 0.90))
+
+# ERC for Annual cost
+erf_obj2 <- estimate_npmetric_erf(as.double(data$AnnualCost),
+                                  as.double(data$T.hat),
+                                  data$counter_weight,
+                                  bw_seq=seq(0.3,3,0.3) ,
+                                  w_vals = seq(quant[1],quant[2], 0.013) ,
+                                  nthread = 10,
+                                  kernel_appr = "kernsmooth")
+
+
+png("erf_obj2.png", width=3000,height=3000, res=1000)
+plot(erf_obj2)
+dev.off()
+erf_obj2[["params"]][["w_vals"]]
+erf_obj2[["erf"]]
+
+# ERC for Active ingredients
+erf_obj1 <- estimate_npmetric_erf(as.double(data$AnnualIngredients),
+                                  as.double(data$T.hat),
+                                  data$counter_weight,
+                                  bw_seq=seq(0.3,3,0.3) ,
+                                  w_vals = seq(quant[1],quant[2], 0.013),
+                                  nthread = 10,
+                                  kernel_appr = "kernsmooth")
+png("erf_obj1.png", width=3000,height=3000, res=1000)
+plot(erf_obj1)
+dev.off()
+erf_obj1[["params"]][["w_vals"]]
+erf_obj1[["erf"]]
+
+### Figure 8: Multiple line plot
+# Data
+dfplot <- read.csv(".../ERF_AnnualCost.csv", check.names=FALSE)
+dfplot <- read.csv(".../ERF_AnnualIngredients.csv", check.names=FALSE)
+
+# plot all three series on the same chart using geom_line()
+ggplot(data = dfplot, aes(x=ExposureLevel, y=OutcomeRate)) + geom_line(aes(colour=Group))+
+  xlab("Exposure Level") + ylab("Outcome Rate")+ 
+  theme(panel.background = element_blank(), axis.line = element_line(colour = "black"))
+ggsave("ERF.png", dpi=1000, height=4, width=5, units="in")
